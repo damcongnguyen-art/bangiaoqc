@@ -1,0 +1,8 @@
+{
+  "name": "FQC bàn giap",
+  "description": "Hệ thống giám sát sản lượng dây chuyền sản xuất Andon nhà máy Ariston theo thời gian thực",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
