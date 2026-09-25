@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback, useMemo, ChangeEvent, useRef } from 'react';
 import { Calculator, X, Monitor } from 'lucide-react';
 import type { LineStatus, LineFilterKey, AndonStatusResponse } from './types';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 import { LineBatchHistoryTable } from './components/LineBatchHistoryTable';
 import { MasterClock } from './components/MasterClock';
 import { ProductionCalculator } from './components/ProductionCalculator';
@@ -360,6 +366,9 @@ export default function App() {
                           <th scope="col" className="py-2.5 px-3 text-center w-52 sm:w-64">
                             MÃ SẢN PHẨM
                           </th>
+                          <th scope="col" className="py-2.5 px-3 text-center w-40 sm:w-48">
+                            CÒN LẠI
+                          </th>
                           <th scope="col" className="py-2.5 pl-3 pr-6 sm:pr-8 text-right w-44 sm:w-56">
                             SẢN LƯỢNG
                           </th>
@@ -368,7 +377,7 @@ export default function App() {
                       <tbody className="divide-y divide-slate-100">
                         {isLoading && lines.length === 0 ? (
                           <tr>
-                            <td colSpan={5} className="py-12 text-center text-slate-400 font-medium">
+                            <td colSpan={6} className="py-12 text-center text-slate-400 font-medium">
                               <div className="inline-flex items-center gap-3">
                                 <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
                                 <span className="text-sm">Đang tải dữ liệu trực tiếp từ máy chủ Andon...</span>
@@ -377,13 +386,15 @@ export default function App() {
                           </tr>
                         ) : onlineLines.length === 0 ? (
                           <tr>
-                            <td colSpan={5} className="py-12 text-center text-slate-400 font-medium text-sm">
+                            <td colSpan={6} className="py-12 text-center text-slate-400 font-medium text-sm">
                               Hiện tại không có mã sản phẩm nào đang chạy (STATUS = 2).
                             </td>
                           </tr>
                         ) : (
                           onlineLines.map((line, idx) => {
                             const rowVisual = getLineStatusVisual(line);
+                            const remaining = (line.planQuantity || 0) - (line.actualQuantity || 0);
+                            
                             return (
                               <tr
                                 key={line.id}
@@ -436,6 +447,30 @@ export default function App() {
                                         {line.productName}
                                       </span>
                                     )}
+                                  </div>
+                                </td>
+
+                                {/* CÒN LẠI */}
+                                <td className="py-2.5 px-3 text-center align-middle">
+                                  <div className="flex flex-col items-center gap-1 min-w-[100px]">
+                                    <span className={cn(
+                                      "text-xs font-black tabular-nums leading-none",
+                                      remaining > 0 ? 'text-orange-600' : remaining === 0 ? 'text-slate-400' : 'text-emerald-600'
+                                    )}>
+                                      {remaining.toLocaleString('vi-VN')}
+                                    </span>
+                                    <div className="w-full h-4 bg-slate-100 rounded-full overflow-hidden border border-slate-200 relative">
+                                      <div 
+                                        className={cn(
+                                          "h-full transition-all duration-500",
+                                          remaining > 0 ? 'bg-orange-500' : 'bg-emerald-500'
+                                        )}
+                                        style={{ width: `${Math.min(((line.actualQuantity || 0) / (line.planQuantity || 1)) * 100, 100)}%` }}
+                                      />
+                                      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-black text-black">
+                                        {Math.round(((line.actualQuantity || 0) / (line.planQuantity || 1)) * 100)}%
+                                      </span>
+                                    </div>
                                   </div>
                                 </td>
 

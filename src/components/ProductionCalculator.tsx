@@ -654,7 +654,7 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
                       <th className="px-3 py-3 w-[22%]">Chuyền</th>
                       <th className="px-3 py-3 w-[28%]">Mã hàng</th>
                       <th className="px-3 py-3 text-right w-[20%]">Máy làm</th>
-                      <th className="px-3 py-3 text-center w-[30%]">Đối chiếu %</th>
+                      <th className="px-3 py-3 text-center w-[30%]">QUẸT</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -672,7 +672,7 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
                       if (isSpecialLine) {
                         targetPercent = 1;
                       } else if (isAuresEasy) {
-                        targetPercent = 10;
+                        targetPercent = 5;
                       }
 
                       const isSufficient = percentage >= targetPercent;
@@ -705,43 +705,37 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
                             <span className="text-xl font-black text-slate-900 block">
                               {item.andonQty.toLocaleString('vi-VN')}
                             </span>
-                            <span className="text-[9px] text-slate-400 font-bold uppercase">Quẹt: {item.totalChecked}</span>
                           </td>
                           <td className="px-3 py-4 text-center align-top">
-                            <div className="flex flex-col items-center gap-1">
+                            <div className="flex flex-col items-center gap-0">
                               <span className={cn(
                                 "text-xl font-black transition-colors",
                                 isSufficient ? "text-emerald-600" : "text-rose-600"
                               )}>
+                                {item.totalChecked}
+                              </span>
+                              <span className={cn(
+                                "text-[10px] font-black",
+                                isSufficient ? "text-emerald-500/70" : "text-rose-500/70"
+                              )}>
                                 {percentage.toFixed(1)}%
                               </span>
-                              <div className="flex flex-col items-center">
+                              
+                              <div className="flex flex-col items-center mt-1">
                                 <div className="flex items-center gap-1">
                                   <span className="text-[9px] font-bold text-slate-400 uppercase">Y/C: {targetPercent}%</span>
-                                  {isSufficient ? (
-                                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                                  ) : (
+                                  {!isSufficient && (
                                     <AlertCircle className="w-3 h-3 text-rose-500" />
                                   )}
+                                  {isSufficient && (
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                                  )}
                                 </div>
-                                {!isSufficient && remainingQty > 0 ? (
+                                {!isSufficient && remainingQty > 0 && (
                                   <span className="text-[10px] font-black text-rose-500 mt-0.5 animate-pulse">
                                     Cần thêm: {remainingQty}
                                   </span>
-                                ) : isSufficient ? (
-                                  <span className="text-[10px] font-black text-emerald-600 mt-0.5">
-                                    Đã đủ
-                                  </span>
-                                ) : null}
-                              </div>
-                              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200 mt-1">
-                                <div 
-                                  className={cn(
-                                    "h-full transition-all duration-500",
-                                    isSufficient ? "bg-emerald-500" : "bg-rose-500"
-                                  )}
-                                  style={{ width: `${Math.min((percentage / targetPercent) * 100, 100)}%` }}
-                                />
+                                )}
                               </div>
                             </div>
                           </td>

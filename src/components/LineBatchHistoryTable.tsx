@@ -1,5 +1,11 @@
 import React, { useMemo } from 'react';
 import { LineBatchDetail } from '../types';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 interface LineBatchHistoryTableProps {
   lineName: string;
@@ -49,16 +55,19 @@ export const LineBatchHistoryTable: React.FC<LineBatchHistoryTableProps> = ({
           <table className="w-full border-collapse">
             <thead>
               <tr className="border-b border-slate-100 bg-white text-slate-500 text-[10px] sm:text-xs font-bold uppercase tracking-wider select-none">
-                <th scope="col" className="py-2.5 px-4 text-center w-1/4">
+                <th scope="col" className="py-2.5 px-4 text-center w-[20%]">
                   GIỜ CHẠY
                 </th>
-                <th scope="col" className="py-2.5 px-4 text-center w-1/4">
+                <th scope="col" className="py-2.5 px-4 text-center w-[25%]">
                   MÃ SP
                 </th>
-                <th scope="col" className="py-2.5 px-4 text-center w-1/4">
+                <th scope="col" className="py-2.5 px-4 text-center w-[20%]">
+                  CÒN LẠI
+                </th>
+                <th scope="col" className="py-2.5 px-4 text-center w-[20%]">
                   SẢN LƯỢNG
                 </th>
-                <th scope="col" className="py-2.5 px-4 text-center w-1/4">
+                <th scope="col" className="py-2.5 px-4 text-center w-[15%]">
                   TRẠNG THÁI
                 </th>
               </tr>
@@ -66,7 +75,7 @@ export const LineBatchHistoryTable: React.FC<LineBatchHistoryTableProps> = ({
             <tbody className="divide-y divide-slate-100/90">
               {isLoading && details.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-10 text-center text-slate-400 font-medium">
+                  <td colSpan={5} className="py-10 text-center text-slate-400 font-medium">
                     <div className="inline-flex items-center gap-3">
                       <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
                       <span className="text-sm">Đang tải lịch sử lô hàng...</span>
@@ -75,7 +84,7 @@ export const LineBatchHistoryTable: React.FC<LineBatchHistoryTableProps> = ({
                 </tr>
               ) : details.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-10 text-center text-slate-400 font-medium text-sm">
+                  <td colSpan={5} className="py-10 text-center text-slate-400 font-medium text-sm">
                     Chuyền {lineName} hiện chưa có lịch sử lô hàng nào trong ca làm việc.
                   </td>
                 </tr>
@@ -83,6 +92,7 @@ export const LineBatchHistoryTable: React.FC<LineBatchHistoryTableProps> = ({
                 details.map((item, idx) => {
                   const isRunning = item.status === 2 || item.statusName?.toLowerCase() === 'running';
                   const isFinished = item.status === 3 || item.statusName?.toLowerCase() === 'finished';
+                  const remaining = (item.planQuantity || 0) - (item.actualQuantity || 0);
 
                   return (
                     <tr
@@ -98,7 +108,7 @@ export const LineBatchHistoryTable: React.FC<LineBatchHistoryTableProps> = ({
                           </span>
                           {item.durationHours && (
                             <span className="text-[10px] sm:text-[11px] font-medium text-slate-400">
-                              ({item.durationHours})
+                              {item.durationHours.toString().replace(/[()]/g, '')}
                             </span>
                           )}
                         </div>
@@ -118,14 +128,38 @@ export const LineBatchHistoryTable: React.FC<LineBatchHistoryTableProps> = ({
                         </div>
                       </td>
 
-                      {/* CỘT 3: SẢN LƯỢNG */}
+                      {/* CỘT 3: CÒN LẠI */}
+                      <td className="py-1.5 px-4 text-center align-middle">
+                        <div className="flex flex-col items-center gap-1 min-w-[100px]">
+                          <span className={cn(
+                            "text-[10px] sm:text-[11px] font-black tabular-nums leading-none",
+                            remaining > 0 ? 'text-orange-600' : remaining === 0 ? 'text-slate-400' : 'text-emerald-600'
+                          )}>
+                            {remaining.toLocaleString('vi-VN')}
+                          </span>
+                          <div className="w-full h-4 bg-slate-100 rounded-full overflow-hidden border border-slate-200 relative">
+                            <div 
+                              className={cn(
+                                "h-full transition-all duration-500",
+                                remaining > 0 ? 'bg-orange-500' : 'bg-emerald-500'
+                              )}
+                              style={{ width: `${Math.min(((item.actualQuantity || 0) / (item.planQuantity || 1)) * 100, 100)}%` }}
+                            />
+                            <span className="absolute inset-0 flex items-center justify-center text-[9px] font-black text-black">
+                              {Math.round(((item.actualQuantity || 0) / (item.planQuantity || 1)) * 100)}%
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* CỘT 4: SẢN LƯỢNG */}
                       <td className="py-1.5 px-4 text-center align-middle">
                         <span className="text-base sm:text-lg font-black text-slate-950 tracking-tight tabular-nums">
                           {item.actualQuantity}/{item.planQuantity}
                         </span>
                       </td>
 
-                      {/* CỘT 4: TRẠNG THÁI */}
+                      {/* CỘT 5: TRẠNG THÁI */}
                       <td className="py-1.5 px-4 text-center align-middle">
                         <div className="flex items-center justify-center">
                           {isRunning ? (
