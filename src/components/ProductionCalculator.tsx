@@ -107,14 +107,14 @@ const LINE_MAPPING: Record<string, string> = {
   '06': 'Atmor 1',
   '09': 'Atmor 2',
   '05': 'ELI',
-  '31': '30',
+  '31': '30L',
   '12': '15L',
   '22': '20SL',
   '08': 'PRO'
 };
 
 const DIRECT_LINES = ['Atmor 1', 'Atmor 2', 'ELI', 'PRO'];
-const INDIRECT_LINES = ['15L', '20SL', '30'];
+const INDIRECT_LINES = ['15L', '20SL', '30L'];
 
 const getLinePriority = (lineName: string): number => {
   if (DIRECT_LINES.includes(lineName)) return 1;
@@ -530,28 +530,6 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
 
   return (
     <div className="h-full flex flex-col bg-slate-50 overflow-hidden border-l border-slate-200">
-      {/* Header */}
-      <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-indigo-600 rounded-lg text-white">
-            <Calculator className="w-5 h-5" />
-          </div>
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">Tính Sản Lượng Excel</h2>
-            {data.length > 0 && (
-              <p className="text-xs text-slate-500">
-                {file?.name || persistedFileName} • {data.length.toLocaleString('vi-VN')} dòng
-              </p>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors">
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-      </div>
-
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx,.xls" onChange={handleFileChange} />
         {data.length === 0 ? (
@@ -569,42 +547,38 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Quick Stats */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                <p className="text-[10px] font-bold text-slate-400 uppercase">Quẹt FQC hôm nay</p>
-                <p className="text-2xl font-black text-indigo-600">{filteredData.length.toLocaleString('vi-VN')}</p>
-              </div>
-              <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                <p className="text-[10px] font-bold text-slate-400 uppercase">File đang dùng</p>
-                <div className="flex items-center gap-1.5 mt-1 overflow-hidden">
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                  <p className="text-xs font-black text-slate-700 truncate">{file?.name || persistedFileName}</p>
+            {/* Control Bar (Stats + Date Filter + Actions) */}
+            <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-4 sticky top-0 z-10">
+              <div className="flex items-center gap-6">
+                {/* Stats: Đã kiểm tra */}
+                <div className="flex flex-col leading-tight">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Đã kiểm tra</span>
+                  <span className="text-lg font-black text-indigo-600">
+                    {filteredData.length.toLocaleString('vi-VN')}
+                  </span>
                 </div>
-              </div>
-            </div>
 
-            {/* Filters */}
-            <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-slate-400" />
-                <select 
-                  className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none min-w-[120px]"
-                  value={filters.date}
-                  onChange={(e) => setFilters(f => ({ ...f, date: e.target.value }))}
-                >
-                  <option value="">Tất cả ngày</option>
-                  {uniqueDates.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-              </div>
-              <div className="flex items-center gap-2">
+                {/* Date Filter: Content width */}
+                <div className="flex items-center gap-1.5">
+                  <Filter className="w-3.5 h-3.5 text-slate-400" />
+                  <select 
+                    className="bg-slate-50 border border-slate-200 rounded-lg px-1.5 py-1 text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none w-[100px]"
+                    value={filters.date}
+                    onChange={(e) => setFilters(f => ({ ...f, date: e.target.value }))}
+                  >
+                    <option value="">Tất cả</option>
+                    {uniqueDates.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
+
+                {/* Switch File */}
                 <button 
                   onClick={() => fileInputRef.current?.click()}
-                  className="px-3 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg text-xs font-bold shadow-md shadow-indigo-100 transition-all flex items-center gap-1.5"
-                  title="Chọn file Excel mới từ máy tính"
+                  className="flex items-center gap-1.5 px-2 py-1 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all text-xs font-bold"
+                  title="Đổi file khác"
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5" />
-                  Đổi file khác
+                  <span>Đổi file</span>
                 </button>
               </div>
             </div>
@@ -618,7 +592,7 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
                   viewMode === 'combined' ? "bg-indigo-600 text-white shadow-md" : "text-slate-500 hover:bg-slate-50"
                 )}
               >
-                BÁO CÁO ĐỐI CHIẾU (ANDON GỐC)
+                ĐỐI CHIẾU
               </button>
               <button 
                 onClick={() => setViewMode('standard')}
@@ -627,7 +601,7 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
                   viewMode === 'standard' ? "bg-indigo-600 text-white shadow-md" : "text-slate-500 hover:bg-slate-50"
                 )}
               >
-                DANH SÁCH QUẸT FQC
+                QUẸT FQC
               </button>
             </div>
 
@@ -638,7 +612,7 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
                     <tr>
                       <th className="px-3 py-3 w-[22%]">Chuyền</th>
                       <th className="px-3 py-3 w-[28%]">Mã hàng</th>
-                      <th className="px-3 py-3 text-right w-[20%]">Máy làm</th>
+                      <th className="px-3 py-3 text-right w-[20%]">Sản lượng</th>
                       <th className="px-3 py-3 text-center w-[30%]">QUẸT</th>
                     </tr>
                   </thead>
@@ -756,8 +730,8 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
                     <tr>
                       <th className="px-4 py-3">Mã Đơn</th>
                       <th className="px-4 py-3">Ngày</th>
-                      <th className="px-4 py-3 text-right">Andon</th>
-                      <th className="px-4 py-3 text-right">SL</th>
+                      <th className="px-4 py-3 text-right">Sản lượng</th>
+                      <th className="px-4 py-3 text-right">Quẹt</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">

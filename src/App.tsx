@@ -17,7 +17,7 @@ const BUTTON_TABS: { key: LineFilterKey; label: string }[] = [
   { key: 'ALL', label: 'TẤT CẢ' },
   { key: '15L', label: '15L' },
   { key: '20SL', label: '20SL' },
-  { key: '30', label: '30' },
+  { key: '30L', label: '30L' },
   { key: 'Atmor 1', label: 'Atmor 1' },
   { key: 'Atmor 2', label: 'Atmor 2' },
   { key: 'ELI', label: 'ELI' },
@@ -333,8 +333,8 @@ export default function App() {
               }`}
             >
               {showCalculator ? <Monitor className="w-4 h-4" /> : <Calculator className="w-4 h-4" />}
-              <span className="hidden xl:inline">{showCalculator ? 'Đóng Công Cụ' : 'Tính Sản Lượng Excel'}</span>
-              <span className="hidden sm:inline xl:hidden">{showCalculator ? 'Đóng' : 'Excel'}</span>
+              <span className="hidden xl:inline">{showCalculator ? 'Đóng Công Cụ' : 'FQC Check'}</span>
+              <span className="hidden sm:inline xl:hidden">{showCalculator ? 'Đóng' : 'FQC'}</span>
             </button>
             <MasterClock />
           </div>
@@ -510,7 +510,7 @@ export default function App() {
                   <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
                     <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-pulse" />
                     <h2 className="text-xs sm:text-sm font-black tracking-wider text-slate-800 uppercase">
-                      Tổng sản lượng Andon
+                      SẢN LƯỢNG
                     </h2>
                   </div>
 

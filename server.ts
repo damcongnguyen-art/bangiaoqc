@@ -17,7 +17,7 @@ export interface FactoryLineConfig {
 const FACTORY_LINES: FactoryLineConfig[] = [
   { id: 1, key: '15L', name: '15L' },
   { id: 2, key: '20SL', name: '20SL' },
-  { id: 4, key: '30', name: '30' },
+  { id: 4, key: '30L', name: '30L' },
   { id: 7, key: 'Atmor 1', name: 'Atmor 1' },
   { id: 8, key: 'Atmor 2', name: 'Atmor 2' },
   { id: 11, key: 'ELI', name: 'ELI' },

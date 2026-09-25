@@ -41,4 +41,4 @@ export interface AndonStatusResponse {
   warning?: string;
 }
 
-export type LineFilterKey = 'ALL' | '15L' | '20SL' | '30' | 'Atmor 1' | 'Atmor 2' | 'ELI' | 'PRO';
+export type LineFilterKey = 'ALL' | '15L' | '20SL' | '30L' | 'Atmor 1' | 'Atmor 2' | 'ELI' | 'PRO';
