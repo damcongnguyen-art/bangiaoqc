@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { Upload, FileSpreadsheet, Calculator, AlertCircle, Table as TableIcon, Filter, Settings, CheckCircle2, FileCheck, X, Hash, User, Clock, Layers } from 'lucide-react';
+import { Upload, FileSpreadsheet, Calculator, AlertCircle, Filter, Settings, CheckCircle2, FileCheck, X } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import { format, isValid } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
@@ -37,6 +37,7 @@ interface AndonProdItem {
   productCode: string;
   productName: string;
   andonQty: number;
+  isRunning: boolean;
 }
 
 const findInspectorColumn = (headers: string[]): string => {
@@ -236,43 +237,11 @@ const getNewestDate = (data: RowData[], dateCol: string): string => {
   return dates[0] || '';
 };
 
-// Simple IndexedDB wrapper for storage persistence
-const DB_NAME = 'fqc-calc-db';
-const DB_VERSION = 1;
-const STORE_NAME = 'app-state';
-
-function initDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME);
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-function clearDB(): Promise<void> {
-  return initDB().then((db) => {
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(STORE_NAME, 'readwrite');
-      const store = transaction.objectStore(STORE_NAME);
-      const request = store.clear();
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
-  });
-}
-
 interface ProductionCalculatorProps {
   onClose?: () => void;
   initialFile?: File | null;
   andonLines?: LineStatus[];
 }
-
 export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onClose, initialFile, andonLines = [] }) => {
   const [file, setFile] = useState<File | null>(initialFile || null);
   const [persistedFileName, setPersistedFileName] = useState<string>('');
@@ -281,7 +250,7 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
   const [error, setError] = useState<string | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
   const [data, setData] = useState<RowData[]>([]);
-  const [mappings, setMappings] = useState<Mappings>({ date: '', order: '', inspector: '', shift: '', line: '' });
+  const [mappings, setMappings] = useState<Mappings>({ date: '', order: '', inspector: '', shift: '' });
   const [filters, setFilters] = useState<Filters>({ date: '', order: '', inspector: '', shift: '', line: '' });
   const [extractFirst7, setExtractFirst7] = useState<boolean>(true);
   const [selectedSummaryItem, setSelectedSummaryItem] = useState<{
@@ -458,18 +427,21 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
           
           const lineName = l.name;
           const key = `${lineName}|||${normCode}`;
+          const isThisBatchRunning = batch.status === 2 || batch.statusName?.toLowerCase() === 'running';
           
           if (!map.has(key)) {
             map.set(key, {
               lineName,
               productCode: normCode,
               productName: batch.productName || l.productName || '',
-              andonQty: batch.actualQuantity || 0
+              andonQty: batch.actualQuantity || 0,
+              isRunning: isThisBatchRunning
             });
           } else {
             const existing = map.get(key)!;
             existing.andonQty += (batch.actualQuantity || 0);
             if (!existing.productName && batch.productName) existing.productName = batch.productName;
+            if (isThisBatchRunning) existing.isRunning = true;
           }
         });
       }
@@ -480,13 +452,18 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
       if (normActiveCode) {
         const lineName = l.name;
         const key = `${lineName}|||${normActiveCode}`;
+        const isCurrentlyRunning = l.status === 2 || l.statusName?.toLowerCase() === 'running';
         if (!map.has(key)) {
           map.set(key, {
             lineName,
             productCode: normActiveCode,
             productName: l.productName || '',
-            andonQty: l.actualQuantity || 0
+            andonQty: l.actualQuantity || 0,
+            isRunning: isCurrentlyRunning
           });
+        } else {
+          const existing = map.get(key)!;
+          if (isCurrentlyRunning) existing.isRunning = true;
         }
       }
     });
@@ -539,7 +516,15 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
         return priorityA - priorityB;
       }
       
-      return a.lineName.localeCompare(b.lineName) || b.andonQty - a.andonQty;
+      const lineCmp = a.lineName.localeCompare(b.lineName);
+      if (lineCmp !== 0) return lineCmp;
+
+      // Rule: Within the same line, active batches (isRunning) go to the top
+      if (a.isRunning !== b.isRunning) {
+        return a.isRunning ? -1 : 1;
+      }
+
+      return b.andonQty - a.andonQty;
     });
   }, [andonProductionMap, data, mappings, filters.date, getOrderCode, getRowInspectorAndShift]);
 
@@ -682,9 +667,23 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
                       const remainingQty = Math.max(0, requiredQty - item.totalChecked);
                       
                       return (
-                        <tr key={`${item.lineName}-${item.productCode}`} className="hover:bg-slate-50 transition-colors">
+                        <tr 
+                          key={`${item.lineName}-${item.productCode}`} 
+                          className={cn(
+                            "hover:bg-slate-50 transition-colors",
+                            item.isRunning && "bg-emerald-50/70 border-l-4 border-emerald-500"
+                          )}
+                        >
                           <td className="px-3 py-4 align-top">
-                            <span className="text-lg font-black text-slate-900">{item.lineName}</span>
+                            <div className="flex items-center gap-2">
+                              {item.isRunning && (
+                                <span className="flex h-2 w-2 relative">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                </span>
+                              )}
+                              <span className="text-lg font-black text-slate-900">{item.lineName}</span>
+                            </div>
                             <div className="flex flex-wrap gap-1 mt-1">
                               {Object.entries(item.inspectors).map(([name, count]) => (
                                 <span key={name} className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-md font-bold flex items-center">
@@ -715,10 +714,13 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
                                 {item.totalChecked}
                               </span>
                               <span className={cn(
-                                "text-[10px] font-black",
+                                "text-[10px] font-black flex items-center gap-1",
                                 isSufficient ? "text-emerald-500/70" : "text-rose-500/70"
                               )}>
                                 {percentage.toFixed(1)}%
+                                {!isSufficient && remainingQty > 0 && (
+                                  <span className="text-rose-600 animate-pulse">(-{remainingQty})</span>
+                                )}
                               </span>
                               
                               <div className="flex flex-col items-center mt-1">
@@ -731,11 +733,6 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
                                     <CheckCircle2 className="w-3 h-3 text-emerald-500" />
                                   )}
                                 </div>
-                                {!isSufficient && remainingQty > 0 && (
-                                  <span className="text-[10px] font-black text-rose-500 mt-0.5 animate-pulse">
-                                    Cần thêm: {remainingQty}
-                                  </span>
-                                )}
                               </div>
                             </div>
                           </td>

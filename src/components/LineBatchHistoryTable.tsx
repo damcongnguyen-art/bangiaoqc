@@ -20,18 +20,27 @@ export const LineBatchHistoryTable: React.FC<LineBatchHistoryTableProps> = ({
 }) => {
   // Calculate summary of production by product code for this line
   const summaryData = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<string, { qty: number; isRunning: boolean }>();
     
     details.forEach(item => {
       if (item.productCode) {
-        const currentQty = map.get(item.productCode) || 0;
-        map.set(item.productCode, currentQty + (item.actualQuantity || 0));
+        const current = map.get(item.productCode) || { qty: 0, isRunning: false };
+        const isThisBatchRunning = item.status === 2 || item.statusName?.toLowerCase() === 'running';
+        map.set(item.productCode, { 
+          qty: current.qty + (item.actualQuantity || 0),
+          isRunning: current.isRunning || isThisBatchRunning
+        });
       }
     });
 
     return Array.from(map.entries())
-      .filter(([_, qty]) => qty > 0)
-      .sort((a, b) => b[1] - a[1]);
+      .filter(([_, data]) => data.qty > 0)
+      .sort((a, b) => {
+        if (a[1].isRunning !== b[1].isRunning) {
+          return a[1].isRunning ? -1 : 1;
+        }
+        return b[1].qty - a[1].qty;
+      });
   }, [details]);
 
   return (
@@ -206,11 +215,27 @@ export const LineBatchHistoryTable: React.FC<LineBatchHistoryTableProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {summaryData.map(([code, qty]) => (
-                  <tr key={code} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="py-3 px-6 text-sm font-black text-indigo-700 tracking-tight">{code}</td>
+                {summaryData.map(([code, data]) => (
+                  <tr 
+                    key={code} 
+                    className={cn(
+                      "hover:bg-slate-50/50 transition-colors",
+                      data.isRunning && "bg-emerald-50/70 border-l-4 border-emerald-500"
+                    )}
+                  >
+                    <td className="py-3 px-6 text-sm font-black text-indigo-700 tracking-tight">
+                      <div className="flex items-center gap-2">
+                        {data.isRunning && (
+                          <span className="flex h-2 w-2 relative">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                          </span>
+                        )}
+                        {code}
+                      </div>
+                    </td>
                     <td className="py-3 px-6 text-right text-base font-black text-slate-900 tabular-nums">
-                      {qty.toLocaleString('vi-VN')} <span className="text-[10px] text-slate-400 ml-1">pcs</span>
+                      {data.qty.toLocaleString('vi-VN')} <span className="text-[10px] text-slate-400 ml-1">pcs</span>
                     </td>
                   </tr>
                 ))}

@@ -1,16 +1,17 @@
 import { useState, useEffect, useCallback, useMemo, ChangeEvent, useRef } from 'react';
 import { Calculator, X, Monitor } from 'lucide-react';
-import type { LineStatus, LineFilterKey, AndonStatusResponse } from './types';
+import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+
+import type { LineStatus, LineFilterKey, AndonStatusResponse } from './types';
+import { LineBatchHistoryTable } from './components/LineBatchHistoryTable';
+import { MasterClock } from './components/MasterClock';
+import { ProductionCalculator } from './components/ProductionCalculator';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
-import { LineBatchHistoryTable } from './components/LineBatchHistoryTable';
-import { MasterClock } from './components/MasterClock';
-import { ProductionCalculator } from './components/ProductionCalculator';
-import { motion, AnimatePresence } from 'motion/react';
 
 const BUTTON_TABS: { key: LineFilterKey; label: string }[] = [
   { key: 'ALL', label: 'TẤT CẢ' },
@@ -141,11 +142,13 @@ export default function App() {
   }, []);
 
   const andonTotalsByProduct = useMemo(() => {
-    // 1. Group by Line + ProductCode to get accurate per-line totals first (to avoid overcounting)
+    // 1. Group by Line + ProductCode to get accurate per-line totals first
     const lineProductMap = new Map<string, number>();
+    const runningProductCodes = new Set<string>();
     
     lines.forEach(l => {
       const lineName = l.name;
+      const isLineRunning = l.status === 2 || l.statusName?.toLowerCase() === 'running';
       
       // Process historical details
       if (l.details && Array.isArray(l.details)) {
@@ -154,30 +157,43 @@ export default function App() {
           if (code) {
             const key = `${lineName}|||${code}`;
             lineProductMap.set(key, (lineProductMap.get(key) || 0) + (batch.actualQuantity || 0));
+            
+            const isBatchRunning = batch.status === 2 || batch.statusName?.toLowerCase() === 'running';
+            if (isBatchRunning) runningProductCodes.add(code);
           }
         });
       }
       
-      // Process current active batch (only if not already fully accounted for in details for this specific line)
+      // Process current active batch
       const activeCode = getCleanOrderCode(l.productCode);
       if (activeCode) {
         const key = `${lineName}|||${activeCode}`;
         if (!lineProductMap.has(key)) {
           lineProductMap.set(key, l.actualQuantity || 0);
         }
+        if (isLineRunning) runningProductCodes.add(activeCode);
       }
     });
 
     // 2. Sum up the per-line totals by ProductCode
-    const finalMap = new Map<string, number>();
+    const finalMap = new Map<string, { qty: number; isRunning: boolean }>();
     lineProductMap.forEach((qty, key) => {
       const productCode = key.split('|||')[1];
-      finalMap.set(productCode, (finalMap.get(productCode) || 0) + qty);
+      const existing = finalMap.get(productCode) || { qty: 0, isRunning: false };
+      finalMap.set(productCode, { 
+        qty: existing.qty + qty, 
+        isRunning: runningProductCodes.has(productCode) 
+      });
     });
 
     return Array.from(finalMap.entries())
-      .filter(([_, qty]) => qty > 0)
-      .sort((a, b) => b[1] - a[1]);
+      .filter(([_, data]) => data.qty > 0)
+      .sort((a, b) => {
+        if (a[1].isRunning !== b[1].isRunning) {
+          return a[1].isRunning ? -1 : 1;
+        }
+        return b[1].qty - a[1].qty;
+      });
   }, [lines, getCleanOrderCode]);
 
   const handleHeaderFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
@@ -502,11 +518,35 @@ export default function App() {
                     <p className="text-xs text-slate-400 font-medium py-6 text-center">Chưa ghi nhận sản lượng</p>
                   ) : (
                     <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1">
-                      {andonTotalsByProduct.map(([code, qty]) => (
-                        <div key={code} className="flex items-center justify-between py-2 px-3 bg-slate-50 hover:bg-indigo-50/50 rounded-xl transition-all border border-slate-100">
-                          <span className="text-sm font-black text-indigo-700 tracking-tight">{code}</span>
-                          <span className="text-xs font-black text-slate-800 bg-slate-200/60 px-2 py-1 rounded-lg tabular-nums">
-                            {qty.toLocaleString('vi-VN')} pcs
+                      {andonTotalsByProduct.map(([code, data]) => (
+                        <div 
+                          key={code} 
+                          className={cn(
+                            "flex items-center justify-between py-2 px-3 rounded-xl transition-all border",
+                            data.isRunning 
+                              ? "bg-emerald-50 border-emerald-200 shadow-sm" 
+                              : "bg-slate-50 border-slate-100 hover:bg-indigo-50/50"
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            {data.isRunning && (
+                              <span className="flex h-2 w-2 relative">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                              </span>
+                            )}
+                            <span className={cn(
+                              "text-sm font-black tracking-tight",
+                              data.isRunning ? "text-emerald-700" : "text-indigo-700"
+                            )}>
+                              {code}
+                            </span>
+                          </div>
+                          <span className={cn(
+                            "text-xs font-black px-2 py-1 rounded-lg tabular-nums",
+                            data.isRunning ? "text-emerald-800 bg-emerald-200/60" : "text-slate-800 bg-slate-200/60"
+                          )}>
+                            {data.qty.toLocaleString('vi-VN')} pcs
                           </span>
                         </div>
                       ))}
