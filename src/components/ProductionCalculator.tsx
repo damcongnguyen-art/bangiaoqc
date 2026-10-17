@@ -621,10 +621,9 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
                       const percentage = item.andonQty > 0 ? (item.totalChecked / item.andonQty) * 100 : 0;
                       
                       // Rule: 
-                      // 1% for lines 15L, 20SL, 30
-                      // 10% for "aures easy"
+                      // 1% for lines 15L, 20SL, 30L
                       // 5% for others
-                      const isSpecialLine = ['15L', '20SL', '30'].includes(item.lineName);
+                      const isSpecialLine = INDIRECT_LINES.includes(item.lineName) || ['15L', '20SL', '30L', '30'].includes(item.lineName);
                       const isAuresEasy = item.productName.toLowerCase().includes('aures easy');
                       
                       let targetPercent = 5;
