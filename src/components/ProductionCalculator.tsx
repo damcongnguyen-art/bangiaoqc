@@ -261,6 +261,8 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
     lineCounts?: Record<string, number>;
   } | null>(null);
   const [viewMode, setViewMode] = useState<'combined' | 'standard'>('combined');
+  const [historyData, setHistoryData] = useState<any[]>([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -269,6 +271,40 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
       processFile(initialFile);
     }
   }, [initialFile]);
+
+  // Helper to get current Production Date (DD/MM/YYYY)
+  const getCurrentProductionDate = () => {
+    const now = new Date();
+    if (now.getHours() < 6) now.setDate(now.getDate() - 1);
+    const dd = String(now.getDate()).padStart(2, '0');
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const yyyy = now.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  };
+
+  const fetchHistory = useCallback(async (date: string) => {
+    try {
+      setIsHistoryLoading(true);
+      const res = await fetch(`/api/production-history?date=${encodeURIComponent(date)}`);
+      const result = await res.json();
+      if (result.success) {
+        setHistoryData(result.history);
+      }
+    } catch (err) {
+      console.error('Failed to fetch history:', err);
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const currentProdDate = getCurrentProductionDate();
+    if (filters.date && filters.date !== currentProdDate) {
+      fetchHistory(filters.date);
+    } else {
+      setHistoryData([]);
+    }
+  }, [filters.date, fetchHistory]);
 
   const getOrderCode = useCallback((val: any) => {
     if (val === null || val === undefined) return '';
@@ -368,6 +404,21 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
   const andonProductionMap = useMemo<Map<string, AndonProdItem>>(() => {
     const map = new Map<string, AndonProdItem>();
 
+    // If we have history data for a past date, use it instead of live andonLines
+    if (historyData.length > 0) {
+      historyData.forEach(h => {
+        const key = `${h.lineName}|||${h.productCode}`;
+        map.set(key, {
+          lineName: h.lineName,
+          productCode: h.productCode,
+          productName: h.productName || '',
+          andonQty: h.andonQty || 0,
+          isRunning: false // History data is never "running"
+        });
+      });
+      return map;
+    }
+
     andonLines.forEach(l => {
       // Process details (historical)
       if (l.details && Array.isArray(l.details)) {
@@ -419,7 +470,7 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
       }
     });
     return map;
-  }, [andonLines, getOrderCode]);
+  }, [andonLines, getOrderCode, historyData]);
 
   const orderToLineLookup = useMemo(() => {
     const map = new Map<string, string>();
@@ -607,7 +658,15 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
             </div>
 
             {/* Tabs for switching reports */}
-            <div className="flex bg-white rounded-xl border border-slate-200 p-1 shadow-sm">
+            <div className="flex bg-white rounded-xl border border-slate-200 p-1 shadow-sm relative">
+              {isHistoryLoading && (
+                <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] flex items-center justify-center z-20 rounded-xl">
+                  <div className="flex items-center gap-2 px-3 py-1 bg-white border border-slate-200 rounded-lg shadow-sm">
+                    <div className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-[10px] font-bold text-slate-600 tracking-tight">Đang tải lịch sử...</span>
+                  </div>
+                </div>
+              )}
               <button 
                 onClick={() => setViewMode('combined')}
                 className={cn(

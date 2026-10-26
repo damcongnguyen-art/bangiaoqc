@@ -1,0 +1,45 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Production History
+    match /production_history/{historyId} {
+      // Allow authenticated users to read history for comparison
+      allow read: if isSignedIn();
+      
+      // Allow server-side sync (using admin SDK bypasses rules, but for client-side testing/transparency)
+      allow write: if isSignedIn() && isValidProductionHistory(incoming());
+    }
+
+    function isValidProductionHistory(data) {
+      return data.keys().hasAll(['date', 'lineName', 'productCode', 'andonQty', 'updatedAt'])
+        && data.keys().hasOnly(['date', 'lineName', 'productCode', 'productName', 'andonQty', 'updatedAt'])
+        && data.date is string && data.date.size() <= 20
+        && data.lineName is string && data.lineName.size() <= 50
+        && data.productCode is string && data.productCode.size() <= 50
+        && data.andonQty is number
+        && data.updatedAt is string;
+    }
+  }
+}

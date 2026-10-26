@@ -1,0 +1,43 @@
+{
+  "entities": {
+    "ProductionHistory": {
+      "title": "Production History",
+      "description": "Snapshots of production quantity at the end of each working day.",
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string",
+          "description": "Production date in DD/MM/YYYY format"
+        },
+        "lineName": {
+          "type": "string",
+          "description": "Name of the production line"
+        },
+        "productCode": {
+          "type": "string",
+          "description": "7-digit product code (Order Code)"
+        },
+        "productName": {
+          "type": "string",
+          "description": "Name of the product"
+        },
+        "andonQty": {
+          "type": "number",
+          "description": "Final actual quantity from Andon"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of the last update"
+        }
+      },
+      "required": ["date", "lineName", "productCode", "andonQty", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/production_history/{historyId}": {
+      "schema": "ProductionHistory",
+      "description": "Stores final production quantities for each order per day."
+    }
+  }
+}
