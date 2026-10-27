@@ -110,7 +110,6 @@ const LINE_MAPPING: Record<string, string> = {
   '31': '30L',
   '12': '15L',
   '22': '20SL',
-  '02': '20SL',
   '08': 'PRO'
 };
 
@@ -261,8 +260,6 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
     lineCounts?: Record<string, number>;
   } | null>(null);
   const [viewMode, setViewMode] = useState<'combined' | 'standard'>('combined');
-  const [historyData, setHistoryData] = useState<any[]>([]);
-  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -271,40 +268,6 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
       processFile(initialFile);
     }
   }, [initialFile]);
-
-  // Helper to get current Production Date (DD/MM/YYYY)
-  const getCurrentProductionDate = () => {
-    const now = new Date();
-    if (now.getHours() < 6) now.setDate(now.getDate() - 1);
-    const dd = String(now.getDate()).padStart(2, '0');
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const yyyy = now.getFullYear();
-    return `${dd}/${mm}/${yyyy}`;
-  };
-
-  const fetchHistory = useCallback(async (date: string) => {
-    try {
-      setIsHistoryLoading(true);
-      const res = await fetch(`/api/production-history?date=${encodeURIComponent(date)}`);
-      const result = await res.json();
-      if (result.success) {
-        setHistoryData(result.history);
-      }
-    } catch (err) {
-      console.error('Failed to fetch history:', err);
-    } finally {
-      setIsHistoryLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const currentProdDate = getCurrentProductionDate();
-    if (filters.date && filters.date !== currentProdDate) {
-      fetchHistory(filters.date);
-    } else {
-      setHistoryData([]);
-    }
-  }, [filters.date, fetchHistory]);
 
   const getOrderCode = useCallback((val: any) => {
     if (val === null || val === undefined) return '';
@@ -392,32 +355,67 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
     }
   };
 
+  const getRowInspectorAndShift = useCallback((row: RowData) => {
+    const rawScan = mappings.order ? String(row[mappings.order] || '').trim() : '';
+    const { lineName } = getLineFromScan(rawScan);
+    return {
+      inspector: String(row[mappings.inspector] || 'Chưa xác định').trim(),
+      shift: formatShiftName(String(row[mappings.shift] || 'Chưa xác định')),
+      line: lineName
+    };
+  }, [mappings]);
+
   const uniqueDates = useMemo(() => {
     if (!mappings.date || !data.length) return [];
     return Array.from(new Set(data.map(r => String(r[mappings.date] || '')).filter(Boolean)))
       .sort((a, b) => parseDateToTime(b as string) - parseDateToTime(a as string));
   }, [data, mappings.date]);
 
+  const filteredData = useMemo(() => {
+    if (!mappings.date || !mappings.order) return [];
+    return data.filter(r => {
+      const orderCode = getOrderCode(r[mappings.order]);
+      if (!orderCode) return false;
+      const matchDate = filters.date ? String(r[mappings.date]) === filters.date : true;
+      const matchOrder = filters.order ? orderCode === filters.order : true;
+      const { inspector, shift, line } = getRowInspectorAndShift(r);
+      const matchInspector = filters.inspector ? inspector === filters.inspector : true;
+      const matchShift = filters.shift ? shift === filters.shift : true;
+      const matchLine = filters.line ? line === filters.line : true;
+      return matchDate && matchOrder && matchInspector && matchShift && matchLine;
+    });
+  }, [data, mappings, filters, getOrderCode, getRowInspectorAndShift]);
 
+  const orderSummaryList = useMemo(() => {
+    if (!mappings.date || !mappings.order || !data.length) return [];
+    const map = new Map<string, any>();
+    data.filter(r => !filters.date || String(r[mappings.date]) === filters.date).forEach(row => {
+      const rowDate = String(row[mappings.date] || 'N/A');
+      const orderCode = getOrderCode(row[mappings.order]);
+      if (!orderCode) return;
+      const key = `${rowDate}|||${orderCode}`;
+      const { inspector, shift, line } = getRowInspectorAndShift(row);
+      if (map.has(key)) {
+        const existing = map.get(key);
+        existing.qty++;
+        existing.lineCounts[line] = (existing.lineCounts[line] || 0) + 1;
+        existing.inspectors[inspector] = (existing.inspectors[inspector] || 0) + 1;
+      } else {
+        map.set(key, { 
+          date: rowDate, 
+          orderCode, 
+          qty: 1, 
+          lineCounts: { [line]: 1 },
+          inspectors: { [inspector]: 1 }
+        });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => parseDateToTime(b.date) - parseDateToTime(a.date) || b.qty - a.qty);
+  }, [data, mappings, filters.date, getOrderCode, getRowInspectorAndShift]);
 
   // Group all Andon production by Line + Product (normalized)
   const andonProductionMap = useMemo<Map<string, AndonProdItem>>(() => {
     const map = new Map<string, AndonProdItem>();
-
-    // If we have history data for a past date, use it instead of live andonLines
-    if (historyData.length > 0) {
-      historyData.forEach(h => {
-        const key = `${h.lineName}|||${h.productCode}`;
-        map.set(key, {
-          lineName: h.lineName,
-          productCode: h.productCode,
-          productName: h.productName || '',
-          andonQty: h.andonQty || 0,
-          isRunning: false // History data is never "running"
-        });
-      });
-      return map;
-    }
 
     andonLines.forEach(l => {
       // Process details (historical)
@@ -470,79 +468,7 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
       }
     });
     return map;
-  }, [andonLines, getOrderCode, historyData]);
-
-  const orderToLineLookup = useMemo(() => {
-    const map = new Map<string, string>();
-    andonProductionMap.forEach((val) => {
-      // Prioritize running batches when mapping an order code to a line
-      if (val.isRunning || !map.has(val.productCode)) {
-        map.set(val.productCode, val.lineName);
-      }
-    });
-    return map;
-  }, [andonProductionMap]);
-
-  const getRowInspectorAndShift = useCallback((row: RowData) => {
-    const rawScan = mappings.order ? String(row[mappings.order] || '').trim() : '';
-    const orderCode = getOrderCode(rawScan);
-    
-    // Smart lookup: check if this order code is assigned to a line in Andon
-    let lineName = orderToLineLookup.get(orderCode);
-    
-    // Fallback: use the digit-based mapping if not found in active Andon data
-    if (!lineName) {
-      lineName = getLineFromScan(rawScan).lineName;
-    }
-
-    return {
-      inspector: String(row[mappings.inspector] || 'Chưa xác định').trim(),
-      shift: formatShiftName(String(row[mappings.shift] || 'Chưa xác định')),
-      line: lineName
-    };
-  }, [mappings, orderToLineLookup, getOrderCode]);
-
-  const filteredData = useMemo(() => {
-    if (!mappings.date || !mappings.order) return [];
-    return data.filter(r => {
-      const orderCode = getOrderCode(r[mappings.order]);
-      if (!orderCode) return false;
-      const matchDate = filters.date ? String(r[mappings.date]) === filters.date : true;
-      const matchOrder = filters.order ? orderCode === filters.order : true;
-      const { inspector, shift, line } = getRowInspectorAndShift(r);
-      const matchInspector = filters.inspector ? inspector === filters.inspector : true;
-      const matchShift = filters.shift ? shift === filters.shift : true;
-      const matchLine = filters.line ? line === filters.line : true;
-      return matchDate && matchOrder && matchInspector && matchShift && matchLine;
-    });
-  }, [data, mappings, filters, getOrderCode, getRowInspectorAndShift]);
-
-  const orderSummaryList = useMemo(() => {
-    if (!mappings.date || !mappings.order || !data.length) return [];
-    const map = new Map<string, any>();
-    data.filter(r => !filters.date || String(r[mappings.date]) === filters.date).forEach(row => {
-      const rowDate = String(row[mappings.date] || 'N/A');
-      const orderCode = getOrderCode(row[mappings.order]);
-      if (!orderCode) return;
-      const key = `${rowDate}|||${orderCode}`;
-      const { inspector, shift, line } = getRowInspectorAndShift(row);
-      if (map.has(key)) {
-        const existing = map.get(key);
-        existing.qty++;
-        existing.lineCounts[line] = (existing.lineCounts[line] || 0) + 1;
-        existing.inspectors[inspector] = (existing.inspectors[inspector] || 0) + 1;
-      } else {
-        map.set(key, { 
-          date: rowDate, 
-          orderCode, 
-          qty: 1, 
-          lineCounts: { [line]: 1 },
-          inspectors: { [inspector]: 1 }
-        });
-      }
-    });
-    return Array.from(map.values()).sort((a, b) => parseDateToTime(b.date) - parseDateToTime(a.date) || b.qty - a.qty);
-  }, [data, mappings, filters.date, getOrderCode, getRowInspectorAndShift]);
+  }, [andonLines, getOrderCode]);
 
   // New Combined Report Logic: All Andon production is the base
   const combinedReport = useMemo(() => {
@@ -658,15 +584,7 @@ export const ProductionCalculator: React.FC<ProductionCalculatorProps> = ({ onCl
             </div>
 
             {/* Tabs for switching reports */}
-            <div className="flex bg-white rounded-xl border border-slate-200 p-1 shadow-sm relative">
-              {isHistoryLoading && (
-                <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] flex items-center justify-center z-20 rounded-xl">
-                  <div className="flex items-center gap-2 px-3 py-1 bg-white border border-slate-200 rounded-lg shadow-sm">
-                    <div className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-                    <span className="text-[10px] font-bold text-slate-600 tracking-tight">Đang tải lịch sử...</span>
-                  </div>
-                </div>
-              )}
+            <div className="flex bg-white rounded-xl border border-slate-200 p-1 shadow-sm">
               <button 
                 onClick={() => setViewMode('combined')}
                 className={cn(
